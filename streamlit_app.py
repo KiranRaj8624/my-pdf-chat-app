@@ -18,8 +18,6 @@ from PyPDF2 import PdfReader
 import nltk
 
 # --- Optional extras for PDF text extraction (OCR) ---
-# These are the same as your Flask app.
-# We'll install the dependencies in requirements.txt and packages.txt
 try:
     import google.generativeai as genai
 except Exception:
@@ -59,7 +57,9 @@ def get_gemini_api_key():
     return os.environ.get('GEMINI_API_KEY')
 
 ALLOW_OFFLINE = os.environ.get('ALLOW_OFFLINE', '0') == '1'
-MODEL_NAME = os.environ.get('GEMINI_MODEL', 'gemini-1.5-flash')
+# --- UPDATED LINE 1 ---
+# We are changing the default model to gemini-2.5-pro as requested.
+MODEL_NAME = os.environ.get('GEMINI_MODEL', 'gemini-2.5-pro')
 
 # Configure genai
 GEMINI_API_KEY = get_gemini_api_key()
@@ -129,9 +129,10 @@ def ocr_pdf_images(page_images: List[bytes]) -> str:
     return "\n".join(texts)
 
 # ----- Model Generation Utilities (Copied from your code) -----
-# This function is unchanged and will work perfectly.
 
-FALLBACK_MODELS = ['gemini-1.5-pro', 'gemini-pro']
+# --- UPDATED LINE 2 ---
+# We are updating the fallback list.
+FALLBACK_MODELS = ['gemini-1.5-pro', 'gemini-1.5-flash', 'gemini-pro']
 
 def gemini_generate(prompt: str, max_output_tokens: int = 1024) -> str:
     """Resilient wrapper: tries configured model(s); falls back to offline stub if allowed."""
@@ -141,6 +142,7 @@ def gemini_generate(prompt: str, max_output_tokens: int = 1024) -> str:
         log.error("Generative model not configured and offline mode not enabled.")
         return "Error: The generative model is not configured. (Did you set the API key?)"
 
+    # This line now builds a list like: ['gemini-2.5-pro', 'gemini-1.5-pro', 'gemini-1.5-flash', 'gemini-pro']
     candidates = ([MODEL_NAME] if MODEL_NAME else []) + [m for m in FALLBACK_MODELS if m != MODEL_NAME]
     tried = []
     for m in candidates:
@@ -167,6 +169,7 @@ def gemini_generate(prompt: str, max_output_tokens: int = 1024) -> str:
         return f"[OFFLINE-FALLBACK] All models failed (tried {', '.join(tried)})."
     
     log.error("All model attempts failed (tried: %s)", ", ".join(tried))
+    # This is the error you are seeing
     return f"Error: All generative models failed. (Tried: {', '.join(tried)})"
 
 
@@ -190,13 +193,12 @@ def answer_question_from_context(context: str, question: str) -> str:
     return gemini_generate(prompt, max_output_tokens=1024)
 
 
-# ----- Streamlit UI and App Logic -----
+# ----- Streamlit UI and App Logic (Unchanged) -----
 
 st.set_page_config(layout="wide")
 st.title("📄 Chat with PDF")
 
 # --- Session State Management ---
-# This replaces the Flask session
 if "pdf_text" not in st.session_state:
     st.session_state.pdf_text = None
     st.session_state.filename = None
@@ -236,7 +238,6 @@ with st.sidebar:
 
 # 1. Handle PDF Upload
 if uploaded_file is not None:
-    # Check if this is a new file
     if st.session_state.filename != uploaded_file.name:
         log.info(f"New file uploaded: {uploaded_file.name}")
         st.session_state.filename = uploaded_file.name
@@ -244,8 +245,6 @@ if uploaded_file is not None:
         with st.spinner(f"Processing '{uploaded_file.name}'... This may take a moment."):
             start_time = time.time()
             content = uploaded_file.read()
-
-            # Use your existing extraction logic
             extracted_text, page_images = extract_text_from_pdf(content)
             ocr_text = ''
             if (not extracted_text.strip()) and page_images and pytesseract is not None:
@@ -258,15 +257,12 @@ if uploaded_file is not None:
                 clear_session_state()
             else:
                 st.session_state.pdf_text = full_text
-                # Reset chat history for the new file
                 st.session_state.messages = [
                     {"role": "assistant", 
                      "content": f"Successfully processed **{uploaded_file.name}**."
                                 f" (Text length: {len(full_text)} chars). You can now ask questions."}
                 ]
                 log.info(f"Processed '{uploaded_file.name}'. Elapsed: {time.time() - start_time:.2f}s")
-        
-        # Rerun to display the new "processed" message immediately
         st.rerun()
 
 # 2. Display Chat History
@@ -279,16 +275,13 @@ for message in st.session_state.messages:
 
 # 3. Handle New Chat Input
 if prompt := st.chat_input("Ask a question about the PDF..."):
-    # First, check if a PDF is loaded
     if st.session_state.pdf_text is None:
         st.warning("Please upload a PDF first.", icon="⚠️")
     else:
-        # Add user message to state and display
         st.session_state.messages.append({"role": "user", "content": prompt})
         with st.chat_message("user"):
             st.markdown(prompt)
         
-        # Generate and display bot response
         with st.chat_message("assistant"):
             with st.spinner("Thinking..."):
                 pdf_context = st.session_state.pdf_text
