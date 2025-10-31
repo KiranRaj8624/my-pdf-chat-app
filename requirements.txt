@@ -1,0 +1,8 @@
+# requirements.txt
+streamlit
+google-generativeai
+PyPDF2
+nltk
+pdf2image
+Pillow
+pytesseract
